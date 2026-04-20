@@ -214,6 +214,8 @@ sed -i "s|\"NodeConfigFile\": \"config.json\"|\"NodeConfigFile\": \"/home/ubuntu
 
 ## Create cardano-db-sync service
 
+TODO: DO NOT use ubuntu user; create a least privilege user
+
 ```txt
 # /etc/systemd/system/cardano-db-sync.service
 [Unit]
