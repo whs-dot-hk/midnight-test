@@ -38,8 +38,6 @@ export SNAPSHOT_DIGEST=latest
 
 ## Download snapshot with mithril
 
-TODO: We should mount another disk to `db/` directory; for ebs snapshot
-
 ```sh
 # List snapshots
 ./mithril-client cardano-db snapshot list
@@ -112,6 +110,8 @@ git rev 5a4dcd1b410ba78f9faab7acd48f606496909935
 ```
 
 ## Create data directory
+
+TODO: We should mount another disk to `~/cardano-data/` directory; for ebs snapshot
 
 ```sh
 mkdir ~/cardano-data
