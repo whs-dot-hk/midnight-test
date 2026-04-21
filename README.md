@@ -37,7 +37,9 @@ Prometheus rules in `monitoring/alerts.yml`; metric contract in `monitoring/READ
 
 | Alert | Description | Reasoning |
 | --- | --- | --- |
-| `MidnightValidatorJailedOrNoSigning` | Jailed (`validator_jailed == 1`) or no signed blocks in 30m; `for: 5m`. | Penalties; if jailed, unjail via `notes/RUNBOOK.md`; if not signing, check keys, signer, and consensus connectivity. |
+| `MidnightValidatorJailed` | Jailed (`validator_jailed == 1`); `for: 5m`. | Avoid penalties; unjail via `notes/RUNBOOK.md` and verify validator status. |
+| `MidnightValidatorNotSigning` | No signed blocks in 30m (`increase(validator_signed_blocks_total[30m]) == 0`); `for: 5m`. | Prevent missed duties; check keys, signer process, validator role, and consensus connectivity. |
+| `MidnightValidatorLowSigningRate` | Signing rate below threshold (`rate(validator_signed_blocks_total[30m]) < 0.01`); `for: 10m`. | Early warning before full signing outage; tune threshold and check node performance/connectivity. |
 
 # Section 3 — Automation & Scripting: Node Health Checker (Option C)
 
