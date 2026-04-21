@@ -35,25 +35,44 @@ locals {
       Name = var.instance_name
     }
   )
-}
 
-module "security_group" {
-  source  = "terraform-aws-modules/security-group/aws"
-  version = "~> 5.3"
-
-  name        = "${var.instance_name}-sg"
-  description = "Security group for Cardano DB Sync EC2"
-  vpc_id      = data.terraform_remote_state.vpc.outputs.vpc_id
-
-  ingress_with_cidr_blocks = concat(
+  ingress_rules = concat(
     [
       {
-        from_port   = var.db_sync_port
-        to_port     = var.db_sync_port
+        from_port   = var.rpc_http_port
+        to_port     = var.rpc_http_port
         protocol    = "tcp"
-        description = "Cardano DB Sync traffic"
+        description = "Midnight JSON-RPC (HTTP)"
         cidr_blocks = join(",", var.ingress_cidr_blocks)
-      }
+      },
+      {
+        from_port   = var.rpc_ws_port
+        to_port     = var.rpc_ws_port
+        protocol    = "tcp"
+        description = "Midnight JSON-RPC (WebSocket)"
+        cidr_blocks = join(",", var.ingress_cidr_blocks)
+      },
+      {
+        from_port   = var.prometheus_metrics_port
+        to_port     = var.prometheus_metrics_port
+        protocol    = "tcp"
+        description = "Prometheus metrics"
+        cidr_blocks = join(",", var.ingress_cidr_blocks)
+      },
+      {
+        from_port   = var.node_exporter_port
+        to_port     = var.node_exporter_port
+        protocol    = "tcp"
+        description = "Node exporter"
+        cidr_blocks = join(",", var.ingress_cidr_blocks)
+      },
+      {
+        from_port   = var.p2p_port
+        to_port     = var.p2p_port
+        protocol    = "tcp"
+        description = "Substrate libp2p"
+        cidr_blocks = join(",", var.ingress_cidr_blocks)
+      },
     ],
     var.enable_ssh ? [
       {
@@ -65,13 +84,24 @@ module "security_group" {
       }
     ] : []
   )
+}
+
+module "security_group" {
+  source  = "terraform-aws-modules/security-group/aws"
+  version = "~> 5.3"
+
+  name        = "${var.instance_name}-sg"
+  description = "Security group for Midnight node EC2"
+  vpc_id      = data.terraform_remote_state.vpc.outputs.vpc_id
+
+  ingress_with_cidr_blocks = local.ingress_rules
 
   egress_rules = ["all-all"]
 
   tags = local.common_tags
 }
 
-module "cardano_db_sync_instance" {
+module "midnight_node_instance" {
   source  = "terraform-aws-modules/ec2-instance/aws"
   version = "~> 6.0"
 
@@ -82,7 +112,6 @@ module "cardano_db_sync_instance" {
 
   disable_api_termination = true
 
-  # Enable Session Manager access without opening SSH.
   create_iam_instance_profile = true
   iam_role_policies = {
     AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"

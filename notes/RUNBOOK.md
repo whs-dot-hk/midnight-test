@@ -1,4 +1,4 @@
-# Cardano DB Sync setup
+# Cardano DB Sync Setup
 
 Reference: https://midnightfoundation.notion.site/FNO-Setup-Cardano-Preprod-Availability-3374057b9f23803792b3fa26ee9bdbc1
 
@@ -6,7 +6,7 @@ Reference: https://midnightfoundation.notion.site/FNO-Setup-Cardano-Preprod-Avai
 
 Reference: https://github.com/input-output-hk/mithril/releases
 
-TODO: DO NOT use ubuntu user; create a least privilege user.
+> TODO: DO NOT use ubuntu user; create a least privilege user.
 
 The instance `midnight-test-ec2-cardano-db-sync` can only login with SSM
 
@@ -111,7 +111,7 @@ git rev 5a4dcd1b410ba78f9faab7acd48f606496909935
 
 ## Create data directory
 
-TODO: We should mount another disk to `~/cardano-data/` directory; for ebs snapshot
+> TODO: We should mount another disk to `~/cardano-data/` directory; for ebs snapshot
 
 ```sh
 mkdir ~/cardano-data
@@ -120,7 +120,7 @@ mv ~/tmp/mithril/db/ ~/cardano-data/
 
 ## Create systemd service for cardano-node (replay)
 
-TODO: DO NOT use ubuntu user; create a least privilege user
+> TODO: DO NOT use ubuntu user; create a least privilege user
 
 ```txt
 # /etc/systemd/system/cardano-node.service
@@ -163,7 +163,7 @@ sudo apt install -y postgresql-client
 
 ## Setup midnight db user
 
-Note: the db password can be found in secrets manager
+> Note: the db password can be found in secrets manager
 
 ```sh
 # Connect to the aurora db
@@ -214,7 +214,7 @@ sed -i "s|\"NodeConfigFile\": \"config.json\"|\"NodeConfigFile\": \"/home/ubuntu
 
 ## Create cardano-db-sync service
 
-TODO: DO NOT use ubuntu user; create a least privilege user
+> TODO: DO NOT use ubuntu user; create a least privilege user
 
 ```txt
 # /etc/systemd/system/cardano-db-sync.service
@@ -257,3 +257,327 @@ SELECT
 AS sync_percent
 FROM block;
 ```
+
+```sh
+export CARDANO_NODE_SOCKET_PATH=/home/ubuntu/cardano-data/db/node.socket
+cardano-cli conway query tip --testnet-magic 1 | jq
+{
+  "block": 4628034,
+  "epoch": 283,
+  "era": "Conway",
+  "hash": "2b90f24d5eb5c25fe2489baa46ba1e9d8e398d2bae6aa79f698ad9a6ab2a0687",
+  "slot": 121033501,
+  "slotInEpoch": 419101,
+  "slotsToEpochEnd": 12899,
+  "syncProgress": "100.00"
+}
+```
+
+# Midnight Node Setup
+
+Reference: https://midnightfoundation.notion.site/FNO-Install-Midnight-Node-and-Generate-Validator-Keys-Preprod-3374057b9f2380939d19e37600648212
+
+## Install midnight-node
+
+```sh
+# Prepare directories
+mkdir -p ~/data ~/.local/bin
+
+# Download and extract the node 0.22.3
+mkdir -p ~/tmp && cd ~/tmp
+curl -L -O https://github.com/midnightntwrk/midnight-node/releases/download/node-0.22.3/midnight-node-0.22.3-linux-amd64.tar.gz
+tar -xvzf midnight-node-0.22.3-linux-amd64.tar.gz
+
+# Move files to target locations
+mv ~/tmp/midnight-node ~/.local/bin/
+mv ~/tmp/res ~/
+```
+
+## Generate session keys
+
+> TODO: More secure way to generate keys
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+
+cd ~
+
+# Generate AURA (sr25519)
+midnight-node key generate --scheme sr25519 --output-type json > aura.json
+
+# Generate GRANDPA (ed25519)
+midnight-node key generate --scheme ed25519 --output-type json > grandpa.json
+
+# Generate CROSS-CHAIN (ecdsa)
+midnight-node key generate --scheme ecdsa --output-type json > cross_chain.json
+```
+
+## Generate network keys
+
+
+```
+cp res/cfg/default.toml res/cfg/default.toml.bak
+cat res/cfg/preprod.toml res/cfg/default.toml.bak > res/cfg/default.toml
+```
+
+The file `~/res/cfg/preprod.toml` should look something like this
+
+```toml
+chain = "res/preprod/chain-spec-raw.json"
+base_path = "node/chain"
+
+chainspec_name = "Midnight Preprod"
+chainspec_id = "midnight_preprod"
+chainspec_genesis_state = "res/genesis/genesis_state_preprod.mn"
+chainspec_genesis_block = "res/genesis/genesis_block_preprod.mn"
+chainspec_chain_type = "live"
+chainspec_pc_chain_config = "res/preprod/pc-chain-config.json"
+chainspec_cnight_genesis = "res/preprod/cnight-config.json"
+chainspec_ics_config = "res/preprod/ics-config.json"
+chainspec_reserve_config = "res/preprod/reserve-config.json"
+chainspec_federated_authority_config = "res/preprod/federated-authority-config.json"
+chainspec_system_parameters_config = "res/preprod/system-parameters-config.json"
+chainspec_permissioned_candidates_config = "res/preprod/permissioned-candidates-config.json"
+chainspec_registered_candidates_addresses = "res/preprod/registered-candidates-addresses.json"
+
+cardano_security_parameter = 2160
+cardano_active_slots_coeff = 0.05
+block_stability_margin = 10
+
+mc__first_epoch_timestamp_millis = 1655769600000
+mc__first_epoch_number = 4
+mc__epoch_duration_millis = 432000000
+mc__first_slot_number = 86400
+mc__slot_duration_millis = 1000
+# Values in this file are defaults for testnet
+# TODO: Add values for:
+# - chain_id
+# - threshold_numerator
+# - threshold_denominator
+# - genesis_committee_utxo
+# - governance_authority
+
+wipe_chain_state = false
+use_main_chain_follower_mock = false
+show_config = false
+show_secrets = false
+validator = false
+
+# DO NOT SET THE BASE_PATH HERE
+# This is done in the Earthfile and is set to /node/chain
+# base_path = "/node/chain"
+
+# MidnightEnv Defaults
+#cardano_security_parameter = 432
+#cardano_active_slots_coeff = 0.05
+#block_stability_margin = 10
+#
+#mc__first_epoch_timestamp_millis = 1666656000000
+#mc__first_epoch_number = 0
+#mc__epoch_duration_millis = 86400000
+#mc__first_slot_number = 0
+#mc__slot_duration_millis = 1000
+allow_non_ssl = false
+
+# Memory Monitor Defaults (MiB)
+# Set memory_threshold > 0 to enable. On Linux, checks cgroup limits then /proc/meminfo.
+memory_threshold = 0
+memory_polling_period = 1
+
+# Storage Monitor Defaults
+threshold = 512
+polling_period = 5
+
+# Storage cache size = measured in number of storage nodes
+# Setting of 0 means storage cache size is unlimited.
+# Will cause OOM errors if too much data is loaded.
+
+# Setting to a non-default value derived from the DEFAULT_CACHE_SIZE of the midnight-ledger crate:
+# https://github.com/midnightntwrk/midnight-ledger/blob/ledger-7.0.0-rc.2/storage/src/storage.rs#L54
+storage_cache_size = 10000
+
+# Set to default: 1024 * 1024 * 1024
+trie_cache_size = 1073741824
+
+argv = []
+args = []
+append_args = []
+bootnodes = []
+```
+
+```sh
+NETWORK="preprod"
+NETWORK_DIR="$HOME/data/chains/midnight_${NETWORK}/network"
+mkdir -p "$NETWORK_DIR"
+chmod 700 "$NETWORK_DIR"
+
+midnight-node key generate-node-key --file "$NETWORK_DIR/secret_ed25519"
+12D3KooWHKKNifzYaCSEZ2R6AjSkxR3SbJGCb6C3zvhiJ6kBj57o
+
+
+# Inpsect peer id; output should be same as above
+midnight-node key inspect-node-key --file "$NETWORK_DIR/secret_ed25519"
+```
+
+## Configure key store
+
+```sh
+KEYSTORE_PATH="$HOME/data/chains/midnight_preprod/keystore"
+mkdir -p "$KEYSTORE_PATH"
+
+# Insert AURA key
+midnight-node key insert \
+  --keystore-path "$KEYSTORE_PATH" \
+  --scheme sr25519 \
+  --key-type aura \
+  --suri $(jq -r .secretPhrase aura.json)
+
+# Insert GRANDPA key
+midnight-node key insert \
+  --keystore-path "$KEYSTORE_PATH" \
+  --scheme ed25519 \
+  --key-type gran \
+  --suri "$(jq -r .secretPhrase grandpa.json)"
+
+# Insert Cross-Chain key
+midnight-node key insert \
+  --keystore-path "$KEYSTORE_PATH" \
+  --scheme ecdsa \
+  --key-type beef \
+  --suri "$(jq -r .secretPhrase cross_chain.json)"
+```
+
+## Register as Federated Node Operator
+```sh
+OUTPUT_FILE="$HOME/partner-chains-public-keys.json"
+
+cat <<EOF > "$OUTPUT_FILE"
+{
+  "partner_chains_key": "$(jq -r .publicKey cross_chain.json)",
+  "keys": {
+    "aura": "$(jq -r .publicKey aura.json)",
+    "crch": "$(jq -r .publicKey cross_chain.json)",
+    "gran": "$(jq -r .publicKey grandpa.json)"
+  }
+}
+EOF
+
+cat "$OUTPUT_FILE"
+```
+
+# Setup Wireguard
+
+## Install Wireguard (Version v1.0.20250521; required by Midnight)
+
+```sh
+sudo apt update && sudo apt install -y \
+    git \
+    build-essential \
+    pkg-config \
+    libelf-dev \
+    linux-headers-$(uname -r)
+
+# Define version and create workspace
+WIREGUARD_TOOLS_VERSION="v1.0.20250521"
+WORKDIR="$(mktemp -d)"
+
+# Clone and build
+git clone https://git.zx2c4.com/wireguard-tools "$WORKDIR/wireguard-tools"
+cd "$WORKDIR/wireguard-tools"
+git checkout "$WIREGUARD_TOOLS_VERSION"
+make -C src && sudo make -C src install
+
+# Verify installation
+wg --version
+```
+
+## Generate Wireguard keys
+
+```sh
+umask 077
+
+# Generate keys
+wg genkey | tee privatekey | wg pubkey > publickey
+
+cat publickey
+hrxt67lC787vrqTra5uE+GFeKv0kUfpcNnzIjdZJjHc=
+```
+
+## Send to Midnight Foundation (fill in the form)
+
+> Note: Substrate Network Key (Node Identity) have been generated
+
+![Form response](./form-response.png)
+
+# Run Midnight node in Validator Mode
+
+Reference: https://midnightfoundation.notion.site/FNO-Run-Midnight-Node-in-Validator-Mode-Preprod-3374057b9f238081a377fc6a1219e8e7
+
+Make sure the cardano-db-sync is in sync
+
+```sh
+cexplorer=> SELECT
+    100 * (EXTRACT(epoch FROM (MAX(time) AT TIME ZONE 'UTC')) - EXTRACT(epoch FROM (MIN(time) AT TIME ZONE 'UTC')))
+    / (EXTRACT(epoch FROM (NOW() AT TIME ZONE 'UTC')) - EXTRACT(epoch FROM (MIN(time) AT TIME ZONE 'UTC')))
+AS sync_percent
+FROM block;
+    sync_percent
+---------------------
+ 99.9999980123562853
+(1 row)
+```
+
+The `~/.env` file
+
+> TODO: Check if can connect to read-only endpoint of Psostgres; midnight user password share through 1Password; keystore should not be in plaintext
+
+> Important: Edit the files /home/ubuntu/data/chains/midnight_preprod/keystore/{61757261c45d8201496a08afdcd8dc99514f01ea2556490ff033e44259d6b947d749e313, 6772616e730cf073c886a337d0caa75ebe3da8155d433d855e0c725213438d48fafab649, 626565660225105cf2617a17071f9582edee37f713d5c7b030e74c6eea8fb5f976d67e3c30} to remove double quotes
+
+```txt
+export POSTGRES_HOST='midnight-test-aurora-cardano-db-sync-instance-1.clllairbmleh.us-east-1.rds.amazonaws.com'
+export POSTGRES_DB='cexplorer'
+export POSTGRES_PORT=5432
+export POSTGRES_USER='midnight'
+export POSTGRES_PASSWORD='YOUR_POSTGRES_PASSWORD'
+export DB_SYNC_POSTGRES_CONNECTION_STRING=postgresql://midnight:YOUR_POSTGRES_PASSWORD@midnight-test-aurora-cardano-db-sync-instance-1.clllairbmleh.us-east-1.rds.amazonaws.com:5432/cexplorer
+
+# Cardano Preprod params
+#CARDANO_SECURITY_PARAMETER='432'
+export BLOCK_STABILITY_MARGIN=30
+
+# Push to public telemetry
+export PROMETHEUS_PUSH_ENDPOINT='https://telemetry.shielded.tools/api/v1/receive'
+
+# Midnight node settings
+export CFG_PRESET=preprod
+export NODE_NAME='HENRY_WONG_MIDNIGHT_NODE'
+
+# Absolute path to network and keystore files
+export NODE_KEY_FILE='/home/ubuntu/data/chains/midnight_preprod/network/secret_ed25519'
+export AURA_SEED_FILE='/home/ubuntu/data/chains/midnight_preprod/keystore/61757261c45d8201496a08afdcd8dc99514f01ea2556490ff033e44259d6b947d749e313'
+export GRANDPA_SEED_FILE='/home/ubuntu/data/chains/midnight_preprod/keystore/6772616e730cf073c886a337d0caa75ebe3da8155d433d855e0c725213438d48fafab649'
+export CROSS_CHAIN_SEED_FILE='/home/ubuntu/data/chains/midnight_preprod/keystore/626565660225105cf2617a17071f9582edee37f713d5c7b030e74c6eea8fb5f976d67e3c30'
+```
+
+## Start Midnight Node
+
+> TODO: Setup midnight local user to run midnight node
+
+```sh
+source ~/.env
+
+export PATH="$HOME/.local/bin:$PATH"
+
+midnight-node \
+    --chain /home/ubuntu/res/preprod/chain-spec-raw.json \
+    --base-path /home/ubuntu/data \
+    --telemetry-url 'wss://telemetry.shielded.tools./submit 1' \
+    --validator \
+    --pool-limit 35 \
+    --name ${NODE_NAME} \
+    --rpc-port 9933
+```
+
+![Midnight node start](./midnight-node-start.png)
+
+![Midnight node running](./midnight-node-running.png)

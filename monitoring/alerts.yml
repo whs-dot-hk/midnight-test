@@ -1,0 +1,32 @@
+groups:
+  - name: midnight-validator-health
+    rules:
+      - alert: MidnightValidatorJailed
+        expr: validator_jailed == 1
+        for: 5m
+        labels:
+          severity: critical
+          service: midnight-validator
+        annotations:
+          summary: "Validator is jailed"
+          description: "validator_jailed has been 1 for 5 minutes. Check validator status and run unjail if needed."
+
+      - alert: MidnightValidatorNotSigning
+        expr: increase(validator_signed_blocks_total[30m]) == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: midnight-validator
+        annotations:
+          summary: "Validator is not signing blocks"
+          description: "validator_signed_blocks_total did not increase in the last 30 minutes. Check signer key, consensus connectivity, and validator role."
+
+      - alert: MidnightValidatorLowSigningRate
+        expr: rate(validator_signed_blocks_total[30m]) < 0.01
+        for: 10m
+        labels:
+          severity: warning
+          service: midnight-validator
+        annotations:
+          summary: "Validator signing rate below threshold"
+          description: "Signing rate is below 0.01 blocks/second over 30 minutes. Tune threshold for your network and check node performance and connectivity."
